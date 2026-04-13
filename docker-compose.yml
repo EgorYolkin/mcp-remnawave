@@ -2,10 +2,24 @@ services:
   remnawave-mcp:
     build: .
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     environment:
+      - MCP_TRANSPORT=http
+      - MCP_HTTP_HOST=0.0.0.0
+      - MCP_HTTP_PORT=3100
+      - MCP_HTTP_PATH=/mcp
+      - MCP_HTTP_STATELESS=true
+      - MCP_ALLOW_REMOTE=true
+      - MCP_REDACT_SENSITIVE=${MCP_REDACT_SENSITIVE:-true}
+      - REMNAWAVE_SAFE_MODE=${REMNAWAVE_SAFE_MODE:-balanced}
       - REMNAWAVE_BASE_URL=${REMNAWAVE_BASE_URL}
       - REMNAWAVE_API_TOKEN=${REMNAWAVE_API_TOKEN}
       - REMNAWAVE_API_KEY=${REMNAWAVE_API_KEY:-}
       - REMNAWAVE_READONLY=${REMNAWAVE_READONLY:-false}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/healthz').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped

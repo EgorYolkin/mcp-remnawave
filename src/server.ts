@@ -4,11 +4,14 @@ import { Config } from './config.js';
 import { registerAllTools } from './tools/index.js';
 import { registerAllResources } from './resources/index.js';
 import { registerAllPrompts } from './prompts/index.js';
+import { configureSecurity } from './security.js';
 
 export function createServer(config: Config): McpServer {
+    configureSecurity(config);
+
     const server = new McpServer({
         name: 'remnawave-mcp',
-        version: '1.0.0',
+        version: '1.2.0',
     });
 
     const client = new RemnawaveClient(config);

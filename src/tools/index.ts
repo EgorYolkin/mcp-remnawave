@@ -18,8 +18,18 @@ import { registerSubPageConfigTools } from './subscription-page-configs.js';
 import { registerNodePluginTools } from './node-plugins.js';
 import { registerIpControlTools } from './ip-control.js';
 import { registerMetadataTools } from './metadata.js';
+import { isToolAllowed } from '../security.js';
 
 export function registerAllTools(server: McpServer, client: RemnawaveClient, readonly: boolean) {
+    const originalTool = server.tool.bind(server);
+    server.tool = ((name: string, ...args: unknown[]) => {
+        if (!isToolAllowed(name)) {
+            return undefined;
+        }
+
+        return (originalTool as (...toolArgs: unknown[]) => unknown)(name, ...args);
+    }) as typeof server.tool;
+
     registerUserTools(server, client, readonly);
     registerNodeTools(server, client, readonly);
     registerHostTools(server, client, readonly);

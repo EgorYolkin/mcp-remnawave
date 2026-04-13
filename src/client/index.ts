@@ -31,14 +31,15 @@ export class RemnawaveClient {
         }
         const res = await fetch(url, options);
         if (!res.ok) {
-            let errorMessage: string;
+            let errorMessage = `HTTP ${res.status} ${res.statusText}`;
             try {
                 const errorBody = await res.json();
-                errorMessage =
-                    (errorBody as { message?: string }).message ||
-                    JSON.stringify(errorBody);
+                const candidateMessage = (errorBody as { message?: string }).message;
+                if (candidateMessage && typeof candidateMessage === 'string') {
+                    errorMessage = candidateMessage;
+                }
             } catch {
-                errorMessage = `HTTP ${res.status} ${res.statusText}`;
+                // Keep the status-based fallback for non-JSON responses.
             }
             throw new Error(`Remnawave API error: ${errorMessage}`);
         }

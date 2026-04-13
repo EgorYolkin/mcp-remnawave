@@ -46,10 +46,17 @@ Create a `.env` file or pass environment variables:
 | `REMNAWAVE_API_TOKEN` | Yes | API token from panel settings |
 | `REMNAWAVE_API_KEY` | No | API key for Caddy reverse proxy authentication |
 | `REMNAWAVE_READONLY` | No | Set to `true` to enable readonly mode |
+| `REMNAWAVE_SAFE_MODE` | No | `off`, `balanced` (default), or `strict` |
+| `MCP_TRANSPORT` | No | `stdio` (default) or `http` |
+| `MCP_HTTP_HOST` | No | HTTP bind host, default `127.0.0.1` |
+| `MCP_HTTP_PORT` | No | HTTP bind port, default `3100` |
+| `MCP_HTTP_PATH` | No | HTTP MCP path, default `/mcp` |
+| `MCP_REDACT_SENSITIVE` | No | Redact known sensitive fields in responses/errors, default `true` |
 
 ```env
 REMNAWAVE_BASE_URL=https://vpn.example.com
 REMNAWAVE_API_TOKEN=your-api-token-here
+REMNAWAVE_SAFE_MODE=balanced
 ```
 
 ### Caddy with Custom Path
@@ -69,28 +76,14 @@ Set `REMNAWAVE_READONLY=true` to disable all write operations (create, update, d
 
 Useful for monitoring dashboards or shared environments where you want to prevent accidental changes.
 
-In readonly mode, the available tools are reduced from 153 to 69:
+`REMNAWAVE_SAFE_MODE=balanced` is the default and additionally hides the most dangerous data-exposure tools even when the server is otherwise writable:
 
-| Category | Available tools |
-|----------|----------------|
-| Users (10) | `users_list`, `users_get`, `users_get_by_username`, `users_get_by_short_uuid`, `users_get_by_telegram_id`, `users_get_by_email`, `users_get_by_tag`, `users_get_by_subscription_uuid`, `users_tags_list`, `users_resolve` |
-| Nodes (3) | `nodes_list`, `nodes_get`, `nodes_tags_list` |
-| Hosts (3) | `hosts_list`, `hosts_get`, `hosts_tags_list` |
-| System (10) | all tools (read-only by nature) |
-| Subscriptions (10) | all tools (read-only by nature) |
-| Config Profiles & Inbounds (5) | `config_profiles_list`, `config_profiles_get`, `inbounds_list`, `config_profiles_get_inbounds`, `config_profiles_get_computed_config` |
-| Internal Squads (2) | `squads_list`, `squads_accessible_nodes` |
-| HWID (4) | `hwid_devices_list`, `hwid_devices_list_all`, `hwid_stats`, `hwid_top_users` |
-| API Tokens (1) | `api_tokens_list` |
-| Keygen (1) | `keygen_get` |
-| Infra Billing (4) | `billing_providers_list`, `billing_provider_get`, `billing_nodes_list`, `billing_history_list` |
-| Snippets (1) | `snippets_list` |
-| External Squads (2) | `external_squads_list`, `external_squads_get` |
-| Settings (1) | `settings_get` |
-| Sub Page Configs (2) | `sub_page_configs_list`, `sub_page_configs_get` |
-| Node Plugins (4) | `node_plugins_list`, `node_plugins_get`, `node_plugins_torrent_reports`, `node_plugins_torrent_stats` |
-| IP Control (4) | `ip_control_fetch_ips`, `ip_control_get_fetch_ips_result`, `ip_control_fetch_users_ips`, `ip_control_get_fetch_users_ips_result` |
-| Metadata (2) | `metadata_node_get`, `metadata_user_get` |
+- `api_tokens_*`
+- `keygen_get`
+- `subscriptions_get_connection_keys`
+- `subscriptions_get_raw_by_short_uuid`
+
+Use `REMNAWAVE_SAFE_MODE=off` only if you explicitly want the full tool surface. Use `strict` if you want extra filtering on settings and metadata tools.
 
 ### Usage with Claude Desktop
 
@@ -111,6 +104,28 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
     }
   }
 }
+```
+
+### Usage with Codex
+
+Codex CLI and the IDE extension share the same config in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.remnawave]
+command = "node"
+args = ["/absolute/path/to/remnawave-mcp/dist/index.js"]
+
+[mcp_servers.remnawave.env]
+REMNAWAVE_BASE_URL = "https://vpn.example.com"
+REMNAWAVE_API_TOKEN = "your-api-token-here"
+REMNAWAVE_SAFE_MODE = "balanced"
+```
+
+For HTTP mode:
+
+```toml
+[mcp_servers.remnawave]
+url = "http://127.0.0.1:3100/mcp"
 ```
 
 ### Usage with Cursor / Windsurf
@@ -134,14 +149,42 @@ Add to `.cursor/mcp.json` or `.windsurf/mcp.json` in your project:
 }
 ```
 
+### Usage with Qwen Code
+
+Add to `~/.qwen/settings.json` or `.qwen/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "remnawave": {
+      "httpUrl": "http://127.0.0.1:3100/mcp",
+      "timeout": 15000
+    }
+  }
+}
+```
+
 ### Docker
 
 ```bash
-npm run build
-docker compose up -d
+cp .env.example .env
+# Fill in REMNAWAVE_BASE_URL and REMNAWAVE_API_TOKEN
+docker compose up --build -d
 ```
 
-Environment variables are passed via `.env` file or `docker-compose.yml`.
+The compose stack runs the MCP server in HTTP mode and exposes it only on `127.0.0.1:3100` by default.
+
+Health endpoint:
+
+```text
+http://127.0.0.1:3100/healthz
+```
+
+MCP endpoint:
+
+```text
+http://127.0.0.1:3100/mcp
+```
 
 ### Available Tools
 
@@ -505,10 +548,17 @@ npm run build
 | `REMNAWAVE_API_TOKEN` | Да | API-токен из настроек панели |
 | `REMNAWAVE_API_KEY` | Нет | API-ключ для аутентификации через Caddy reverse proxy |
 | `REMNAWAVE_READONLY` | Нет | `true` для включения режима только чтения |
+| `REMNAWAVE_SAFE_MODE` | Нет | `off`, `balanced` (по умолчанию) или `strict` |
+| `MCP_TRANSPORT` | Нет | `stdio` (по умолчанию) или `http` |
+| `MCP_HTTP_HOST` | Нет | Хост для HTTP-сервера, по умолчанию `127.0.0.1` |
+| `MCP_HTTP_PORT` | Нет | Порт HTTP-сервера, по умолчанию `3100` |
+| `MCP_HTTP_PATH` | Нет | HTTP путь MCP, по умолчанию `/mcp` |
+| `MCP_REDACT_SENSITIVE` | Нет | Маскировать чувствительные поля в ответах и ошибках, по умолчанию `true` |
 
 ```env
 REMNAWAVE_BASE_URL=https://vpn.example.com
 REMNAWAVE_API_TOKEN=ваш-api-токен
+REMNAWAVE_SAFE_MODE=balanced
 ```
 
 ### Caddy с кастомным путём
@@ -528,28 +578,14 @@ REMNAWAVE_API_KEY=ваш-caddy-api-ключ
 
 Полезно для мониторинговых дашбордов или общих окружений, где нужно исключить случайные изменения.
 
-В readonly-режиме количество доступных инструментов сокращается с 153 до 69:
+`REMNAWAVE_SAFE_MODE=balanced` включён по умолчанию и дополнительно скрывает самые опасные инструменты утечки данных даже если сервер работает не только в readonly:
 
-| Категория | Доступные инструменты |
-|-----------|----------------------|
-| Пользователи (10) | `users_list`, `users_get`, `users_get_by_username`, `users_get_by_short_uuid`, `users_get_by_telegram_id`, `users_get_by_email`, `users_get_by_tag`, `users_get_by_subscription_uuid`, `users_tags_list`, `users_resolve` |
-| Ноды (3) | `nodes_list`, `nodes_get`, `nodes_tags_list` |
-| Хосты (3) | `hosts_list`, `hosts_get`, `hosts_tags_list` |
-| Система (10) | все инструменты (только чтение по природе) |
-| Подписки (10) | все инструменты (только чтение по природе) |
-| Конфиг-профили и Inbounds (5) | `config_profiles_list`, `config_profiles_get`, `inbounds_list`, `config_profiles_get_inbounds`, `config_profiles_get_computed_config` |
-| Внутренние группы (2) | `squads_list`, `squads_accessible_nodes` |
-| HWID (4) | `hwid_devices_list`, `hwid_devices_list_all`, `hwid_stats`, `hwid_top_users` |
-| API-токены (1) | `api_tokens_list` |
-| Keygen (1) | `keygen_get` |
-| Биллинг (4) | `billing_providers_list`, `billing_provider_get`, `billing_nodes_list`, `billing_history_list` |
-| Сниппеты (1) | `snippets_list` |
-| Внешние группы (2) | `external_squads_list`, `external_squads_get` |
-| Настройки (1) | `settings_get` |
-| Страницы подписок (2) | `sub_page_configs_list`, `sub_page_configs_get` |
-| Плагины нод (4) | `node_plugins_list`, `node_plugins_get`, `node_plugins_torrent_reports`, `node_plugins_torrent_stats` |
-| IP-контроль (4) | `ip_control_fetch_ips`, `ip_control_get_fetch_ips_result`, `ip_control_fetch_users_ips`, `ip_control_get_fetch_users_ips_result` |
-| Метаданные (2) | `metadata_node_get`, `metadata_user_get` |
+- `api_tokens_*`
+- `keygen_get`
+- `subscriptions_get_connection_keys`
+- `subscriptions_get_raw_by_short_uuid`
+
+Используйте `REMNAWAVE_SAFE_MODE=off`, только если вам действительно нужен полный набор инструментов. `strict` добавляет дополнительную фильтрацию инструментов настроек и метаданных.
 
 ### Использование с Claude Desktop
 
@@ -570,6 +606,28 @@ REMNAWAVE_API_KEY=ваш-caddy-api-ключ
     }
   }
 }
+```
+
+### Использование с Codex
+
+Codex CLI и IDE extension используют `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.remnawave]
+command = "node"
+args = ["/абсолютный/путь/к/remnawave-mcp/dist/index.js"]
+
+[mcp_servers.remnawave.env]
+REMNAWAVE_BASE_URL = "https://vpn.example.com"
+REMNAWAVE_API_TOKEN = "ваш-api-токен"
+REMNAWAVE_SAFE_MODE = "balanced"
+```
+
+Для HTTP-режима:
+
+```toml
+[mcp_servers.remnawave]
+url = "http://127.0.0.1:3100/mcp"
 ```
 
 ### Использование с Cursor / Windsurf
@@ -593,14 +651,42 @@ REMNAWAVE_API_KEY=ваш-caddy-api-ключ
 }
 ```
 
+### Использование с Qwen Code
+
+Добавьте в `~/.qwen/settings.json` или `.qwen/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "remnawave": {
+      "httpUrl": "http://127.0.0.1:3100/mcp",
+      "timeout": 15000
+    }
+  }
+}
+```
+
 ### Docker
 
 ```bash
-npm run build
-docker compose up -d
+cp .env.example .env
+# Заполните REMNAWAVE_BASE_URL и REMNAWAVE_API_TOKEN
+docker compose up --build -d
 ```
 
-Переменные окружения передаются через `.env` файл или `docker-compose.yml`.
+Compose запускает MCP сервер в HTTP-режиме и по умолчанию публикует его только на `127.0.0.1:3100`.
+
+Health endpoint:
+
+```text
+http://127.0.0.1:3100/healthz
+```
+
+MCP endpoint:
+
+```text
+http://127.0.0.1:3100/mcp
+```
 
 ### Доступные инструменты
 

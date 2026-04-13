@@ -1,17 +1,20 @@
+import { sanitizeData, sanitizeErrorMessage, serializeJson } from '../security.js';
+
 export function toolResult(data: unknown) {
     return {
         content: [
             {
                 type: 'text' as const,
-                text: JSON.stringify(data, null, 2),
+                text: serializeJson(data),
             },
         ],
+        structuredContent: sanitizeData(data),
     };
 }
 
 export function toolError(error: unknown) {
     const message =
-        error instanceof Error ? error.message : String(error);
+        error instanceof Error ? sanitizeErrorMessage(error.message) : sanitizeErrorMessage(String(error));
     return {
         content: [
             {
